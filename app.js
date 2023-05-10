@@ -3,7 +3,6 @@ const bodyParser = require('body-parser')
 const ejs = require('ejs')
 // const _ = require('lodash')
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
 
 
 
@@ -28,9 +27,6 @@ const userSchema = new mongoose.Schema({
     username: String,
     password: String
 })
-
-const secret = "theownerofthisdatabaseismaheepgupta";
-userSchema.plugin(encrypt, { secret: secret, encryptedFields:['password'] });
 
 // Model
 const userCollection = mongoose.model('userCollection', userSchema)
