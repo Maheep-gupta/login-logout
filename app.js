@@ -39,6 +39,10 @@ app.get('/secrets', async (req, res) => {
     console.log(LoggedIn)
     LoggedIn ? await res.render('secrets') : await res.render('home');
 })
+app.get('/logout', async (req, res) => {
+    LoggedIn=false
+    await res.redirect('/')
+})
 
 // For Register
 app.route('/register')
