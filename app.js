@@ -1,9 +1,11 @@
+require('dotenv').config()
 const express = require('express')
 const bodyParser = require('body-parser')
 const ejs = require('ejs')
 // const _ = require('lodash')
 const mongoose = require('mongoose');
 const encrypt = require('mongoose-encryption');
+const { config } = require('dotenv')
 
 
 
@@ -13,7 +15,7 @@ app.set('view engine', 'ejs')
 app.use("/public", express.static(__dirname + "/public"));
 app.use(bodyParser.urlencoded({ extended: true }))
 
-mongoose.connect(`mongodb+srv://maheepgupta:ZXA6gXYBfjhu_LM@cluster0.j8jvfuc.mongodb.net/userCredentials`);
+mongoose.connect(`mongodb+srv://maheepgupta:${process.env.DB_PASSWORD}@cluster0.j8jvfuc.mongodb.net/userCredentials`);
 
 
 const db = mongoose.connection;
@@ -29,8 +31,8 @@ const userSchema = new mongoose.Schema({
     password: String
 })
 
-const secret = "theownerofthisdatabaseismaheepgupta";
-userSchema.plugin(encrypt, { secret: secret, encryptedFields:['password'] });
+
+userSchema.plugin(encrypt, { secret: process.env.SECRET_KEY, encryptedFields:['password'] });
 
 // Model
 const userCollection = mongoose.model('userCollection', userSchema)
