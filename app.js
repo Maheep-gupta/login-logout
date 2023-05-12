@@ -2,10 +2,9 @@ require('dotenv').config()
 const express = require('express')
 const bodyParser = require('body-parser')
 const ejs = require('ejs')
-// const _ = require('lodash')
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
-const { config } = require('dotenv')
+const { config } = require('dotenv');
+const md5 =require('md5');
 
 
 
@@ -60,7 +59,7 @@ app.route('/register')
     .post(async (req, res) => {
         const userData = new userCollection({
             username: req.body.username,
-            password: req.body.password
+            password: md5(req.body.password)
         })
         // whether user exist's or not
         userCollection.findOne({ username: req.body.username })
@@ -102,7 +101,7 @@ app.route('/login')
                 }
                 else {
                     //User Exists
-                    if (loggingUser.password == req.body.password) {
+                    if (loggingUser.password == md5(req.body.password)) {
                         console.log("Login successful")
                         LoggedIn = true;
                         res.redirect('/secrets')
