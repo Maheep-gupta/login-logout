@@ -2,9 +2,9 @@ require('dotenv').config()
 const express = require('express')
 const bodyParser = require('body-parser')
 const ejs = require('ejs')
-// const _ = require('lodash')
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 const { config } = require('dotenv')
 
 
@@ -14,6 +14,7 @@ const app = express();
 app.set('view engine', 'ejs')
 app.use("/public", express.static(__dirname + "/public"));
 app.use(bodyParser.urlencoded({ extended: true }))
+
 
 mongoose.connect(`mongodb+srv://maheepgupta:${process.env.DB_PASSWORD}@cluster0.j8jvfuc.mongodb.net/userCredentials`);
 
@@ -32,8 +33,6 @@ const userSchema = new mongoose.Schema({
 })
 
 
-userSchema.plugin(encrypt, { secret: process.env.SECRET_KEY, encryptedFields:['password'] });
-
 // Model
 const userCollection = mongoose.model('userCollection', userSchema)
 
@@ -46,7 +45,7 @@ app.get('/secrets', async (req, res) => {
     LoggedIn ? await res.render('secrets') : await res.render('home');
 })
 app.get('/logout', async (req, res) => {
-    LoggedIn=false
+    LoggedIn = false
     await res.redirect('/')
 })
 
@@ -58,29 +57,34 @@ app.route('/register')
     })
 
     .post(async (req, res) => {
-        const userData = new userCollection({
-            username: req.body.username,
-            password: req.body.password
-        })
-        // whether user exist's or not
-        userCollection.findOne({ username: req.body.username })
-            .then((exsitingUserName) => {
-                // Its is a new User
-                if (exsitingUserName == null) {
-                    console.log("user Not exist")
-                    userData.save()
-                    LoggedIn = true;
-                    res.redirect('/secrets')
-                }
-                else {
-                    //User Already Exists
-                    console.log("user  exist")
-                    res.redirect('/register')
-                }
+
+        bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
+            const userData = new userCollection({
+                username: req.body.username,
+                password: hash
             })
-            .catch((err) => {
-                console.log(err);
-            });
+            // whether user exist's or not
+            userCollection.findOne({ username: req.body.username })
+                .then((exsitingUserName) => {
+                    // Its is a new User
+                    if (exsitingUserName == null) {
+                        console.log("user Not exist")
+                        userData.save()
+                        LoggedIn = true;
+                        res.redirect('/secrets')
+                    }
+                    else {
+                        //User Already Exists
+                        console.log("user  exist")
+                        res.redirect('/register')
+                    }
+                })
+                .catch((err) => {
+                    console.log(err);
+                });
+
+        });
+
 
 
 
@@ -102,14 +106,19 @@ app.route('/login')
                 }
                 else {
                     //User Exists
-                    if (loggingUser.password == req.body.password) {
-                        console.log("Login successful")
-                        LoggedIn = true;
-                        res.redirect('/secrets')
-                    } else {
-                        console.log("Wrong Passwords")
-                        res.render('login')
-                    }
+                    bcrypt.compare(req.body.password, loggingUser.password).then(function (result) {
+                        if (result == true) {
+                            console.log("Login successful")
+                            LoggedIn = true;
+                            res.redirect('/secrets')
+                            // result == true
+                        }
+                        else {
+                            console.log("Wrong Passwords")
+                            res.render('login')
+                        }
+                    });
+
 
                 }
             })
