@@ -3,9 +3,14 @@ const express = require('express')
 const bodyParser = require('body-parser')
 const ejs = require('ejs')
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
-const saltRounds = 10;
+const session = require('express-session')
+const passport = require('passport')
+const passportLocal = require('passport-local')
+const passportLocalMongoose = require('passport-local-mongoose')
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require('mongoose-findorcreate');
 const { config } = require('dotenv')
+
 
 
 
@@ -14,6 +19,15 @@ const app = express();
 app.set('view engine', 'ejs')
 app.use("/public", express.static(__dirname + "/public"));
 app.use(bodyParser.urlencoded({ extended: true }))
+app.use(session({
+    secret: 'ncgvbjhsdfska;klfk',
+    resave: false,
+    saveUninitialized: true,
+    // cookie: { secure: true }
+}))
+
+app.use(passport.initialize())
+app.use(passport.session())
 
 
 mongoose.connect(`mongodb+srv://maheepgupta:${process.env.DB_PASSWORD}@cluster0.j8jvfuc.mongodb.net/userCredentials`);
@@ -29,24 +43,74 @@ db.once('open', function callback() {
 // Schema
 const userSchema = new mongoose.Schema({
     username: String,
-    password: String
+    password: String,
+    googleId: String
 })
+userSchema.plugin(passportLocalMongoose)
+userSchema.plugin(findOrCreate);
 
 
 // Model
 const userCollection = mongoose.model('userCollection', userSchema)
 
-var LoggedIn = false;
+passport.use(userCollection.createStrategy())
+
+passport.serializeUser(function (user, cb) {
+    process.nextTick(function () {
+        cb(null, { id: user.id, username: user.username });
+    });
+});
+
+passport.deserializeUser(function (user, cb) {
+    process.nextTick(function () {
+        return cb(null, user);
+    });
+});
+
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "http://127.0.0.1:3000/auth/google/secrets",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+},
+    function (accessToken, refreshToken, profile, cb) {
+        console.log(profile);
+        userCollection.findOrCreate({ googleId: profile.id }, function (err, user) {
+            return cb(err, user);
+        });
+    }
+));
+
+
+
 app.get('/', async (req, res) => {
     await res.render('home')
-})
+});
+app.get('/auth/google',
+    passport.authenticate('google', { scope: ["profile"] }));
+
+app.get('/auth/google/secrets',
+    passport.authenticate('google', { failureRedirect: '/login' }),
+    function (req, res) {
+        // Successful authentication, redirect home.
+        res.redirect('/secrets');
+    });
+
+
 app.get('/secrets', async (req, res) => {
-    console.log(LoggedIn)
-    LoggedIn ? await res.render('secrets') : await res.render('home');
+    console.log(req.isAuthenticated());
+    if (req.isAuthenticated()) {
+        console.log("Authenticated")
+        res.render('secrets')
+    } else {
+        res.redirect('/login')
+    }
 })
 app.get('/logout', async (req, res) => {
-    LoggedIn = false
-    await res.redirect('/')
+    req.logout(function (err) {
+        if (err) { return console.log(err); }
+        res.redirect('/');
+    });
 })
 
 // For Register
@@ -58,32 +122,17 @@ app.route('/register')
 
     .post(async (req, res) => {
 
-        bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
-            const userData = new userCollection({
-                username: req.body.username,
-                password: hash
-            })
-            // whether user exist's or not
-            userCollection.findOne({ username: req.body.username })
-                .then((exsitingUserName) => {
-                    // Its is a new User
-                    if (exsitingUserName == null) {
-                        console.log("user Not exist")
-                        userData.save()
-                        LoggedIn = true;
-                        res.redirect('/secrets')
-                    }
-                    else {
-                        //User Already Exists
-                        console.log("user  exist")
-                        res.redirect('/register')
-                    }
+        userCollection.register({ username: req.body.username }, req.body.password, (err, user) => {
+            if (err) {
+                console.log(err)
+                res.redirect('/register')
+            } else {
+                passport.authenticate('local')(req, res, () => {
+                    console.log(req.isAuthenticated());
+                    res.redirect('/secrets')
                 })
-                .catch((err) => {
-                    console.log(err);
-                });
-
-        });
+            }
+        })
 
 
 
@@ -98,33 +147,22 @@ app.route('/login')
         await res.render('login')
     })
     .post(async (req, res) => {
-        userCollection.findOne({ username: req.body.username })
-            .then((loggingUser) => {
-                // User Not registered
-                if (loggingUser == null) {
-                    console.log("user Not exist")
-                }
-                else {
-                    //User Exists
-                    bcrypt.compare(req.body.password, loggingUser.password).then(function (result) {
-                        if (result == true) {
-                            console.log("Login successful")
-                            LoggedIn = true;
-                            res.redirect('/secrets')
-                            // result == true
-                        }
-                        else {
-                            console.log("Wrong Passwords")
-                            res.render('login')
-                        }
-                    });
+        const user = new userCollection({
+            username: req.body.username,
+            passport: req.body.password
+        })
+        req.login(user, (err) => {
+            if (err) {
+                console.log(err)
+                res.redirect('/login')
+            } else {
+                passport.authenticate('local')(req, res, () => {
 
+                    res.redirect('/secrets')
+                })
+            }
+        })
 
-                }
-            })
-            .catch((err) => {
-                console.log(err);
-            });
     })
 
 
