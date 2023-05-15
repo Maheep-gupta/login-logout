@@ -45,7 +45,7 @@ const userSchema = new mongoose.Schema({
     username: String,
     password: String,
     googleId: String,
-    secrets:String
+    secrets: String
 })
 userSchema.plugin(passportLocalMongoose)
 userSchema.plugin(findOrCreate);
@@ -101,9 +101,9 @@ app.get('/auth/google/secrets',
 app.get('/secrets', async (req, res) => {
     console.log(req.isAuthenticated());
     if (req.isAuthenticated()) {
-        userCollection.find()
-        console.log("Authenticated")
-        res.render('secrets')
+        const secrets = await userCollection.find({ 'secrets': { $ne: null } })
+        console.log(secrets)
+        res.render("secrets", { foundSecrets: secrets })
     } else {
         res.redirect('/login')
     }
@@ -121,19 +121,22 @@ app.get('/submit', async (req, res) => {
 
 
 app.post('/submit', async (req, res) => {
-    userCollection.findById(req.user.id, (err,foundUser)=>{
-        if (err) {
-            console.log(err);
-        } else {
-            if (foundUser) {
-                foundUser.secrets=req.body.secret
-                userCollection.save(()=>{
-                    res.redirect("/secrets")
-                });
 
-            }
-        }
-    })
+    await userCollection.findOneAndUpdate(
+        { _id: req.user.id },
+        { secrets: req.body.secret })
+    console.log(req.user.id);
+    // if (foundingUser!=null) {
+    //     foundingUser.secrets=req.body.secret
+    //     // console.log(foundingUser);
+    //     // userCollection.save().then(function(err, result) {
+    //     //     console.log('User Created');
+    //     // });
+    res.redirect("/secrets")
+    // } else {
+    //     console.log("No secrets")
+    // }
+
 })
 
 
